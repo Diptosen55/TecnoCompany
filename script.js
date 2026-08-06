@@ -17,7 +17,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 let activeUserId = null, activeUserPhone = null, currentBalance = 0, myInviteCode = "", referredByCode = "none";
-let appConfig = { welcomeBonus: 0, minDeposit: 150, maxWithdraw: 20000, minWithdraw: 150, refCommission: 31, adminBkash: "01700000000", adminNagad: "01800000000", methods: ["বিকাশ", "নগদ"], slides: [], supportTelegram: "", supportWhatsApp: "" };
+let appConfig = { welcomeBonus: 0, minDeposit: 150, maxWithdraw: 20000, minWithdraw: 150, refCommission: 31, adminBkash: "01700000000", adminNagad: "01800000000", methods: ["বিকাশ", "ন নগদ"], slides: [], supportTelegram: "", supportWhatsApp: "" };
 window.claimTimerInterval = null; 
 
 window.showToast = (msg, isSuccess=false) => { 
@@ -163,8 +163,10 @@ onSnapshot(collection(db, 'products'), (snap) => {
     else prodList.innerHTML = `<div style="grid-column: span 2; text-align: center; color: var(--text-muted); font-weight: 600; padding: 20px;">কোনো প্ল্যান নেই</div>`;
 });
 
+// মোট আয় যুক্ত করা আপডেট ফাংশন
 function buildProductCard(p) {
-    return `<div class="product-card"><div class="card-badge">${p.name}</div><div class="card-row"><span>মেয়াদ</span><span>${p.duration}</span></div><div class="card-row"><span>দৈনিক আয়</span><span style="color:#10b981;">৳${p.dailyIncome}</span></div><div class="card-footer"><div class="price">৳${p.price}</div><button class="buy-btn" onclick="buyProduct(${p.price}, '${p.name}', ${p.dailyIncome}, '${p.duration}')">+</button></div></div>`;
+    const totalIncome = parseInt(p.duration) * parseFloat(p.dailyIncome);
+    return `<div class="product-card"><div class="card-badge">${p.name}</div><div class="card-row"><span>মেয়াদ</span><span>${p.duration}</span></div><div class="card-row"><span>দৈনিক আয়</span><span style="color:#10b981;">৳${p.dailyIncome}</span></div><div class="card-row" style="border-top: 1px dashed #e2e8f0; margin-top: 8px; padding-top: 8px;"><span>মোট আয়</span><span style="color:#a855f7; font-weight: 800;">৳${totalIncome}</span></div><div class="card-footer"><div class="price">৳${p.price}</div><button class="buy-btn" onclick="buyProduct(${p.price}, '${p.name}', ${p.dailyIncome}, '${p.duration}')">+</button></div></div>`;
 }
 
 window.handleRegister = async e => {
