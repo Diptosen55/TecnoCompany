@@ -17,7 +17,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 let activeUserId = null, activeUserPhone = null, currentBalance = 0, myInviteCode = "", referredByCode = "none";
-let appConfig = { welcomeBonus: 0, minDeposit: 150, maxWithdraw: 20000, minWithdraw: 150, refCommission: 31, adminBkash: "01700000000", adminNagad: "01800000000", methods: ["বিকাশ", "ন নগদ"], slides: [], supportTelegram: "", supportWhatsApp: "" };
+let appConfig = { welcomeBonus: 0, minDeposit: 150, maxWithdraw: 20000, minWithdraw: 150, refCommission: 31, adminBkash: "01700000000", adminNagad: "01800000000", methods: ["বিকাশ", "নগদ"], slides: [], supportTelegram: "", supportWhatsApp: "" };
 window.claimTimerInterval = null; 
 
 window.showToast = (msg, isSuccess=false) => { 
@@ -67,7 +67,6 @@ window.togglePassword = btn => {
     i.type = i.type === 'password' ? 'text' : 'password'; 
 };
 
-// Fallback for copying text in Webview
 window.copyTextToClipboard = (text) => {
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(text).then(() => window.showToast("কপি হয়েছে!", true)).catch(() => fallbackCopyTextToClipboard(text));
@@ -163,7 +162,6 @@ onSnapshot(collection(db, 'products'), (snap) => {
     else prodList.innerHTML = `<div style="grid-column: span 2; text-align: center; color: var(--text-muted); font-weight: 600; padding: 20px;">কোনো প্ল্যান নেই</div>`;
 });
 
-// মোট আয় যুক্ত করা আপডেট ফাংশন
 function buildProductCard(p) {
     const totalIncome = parseInt(p.duration) * parseFloat(p.dailyIncome);
     return `<div class="product-card"><div class="card-badge">${p.name}</div><div class="card-row"><span>মেয়াদ</span><span>${p.duration}</span></div><div class="card-row"><span>দৈনিক আয়</span><span style="color:#10b981;">৳${p.dailyIncome}</span></div><div class="card-row" style="border-top: 1px dashed #e2e8f0; margin-top: 8px; padding-top: 8px;"><span>মোট আয়</span><span style="color:#a855f7; font-weight: 800;">৳${totalIncome}</span></div><div class="card-footer"><div class="price">৳${p.price}</div><button class="buy-btn" onclick="buyProduct(${p.price}, '${p.name}', ${p.dailyIncome}, '${p.duration}')">+</button></div></div>`;
@@ -186,7 +184,7 @@ window.handleRegister = async e => {
         const userCred = await createUserWithEmailAndPassword(auth, phone+"@tecno.app", pass);
         const newCode = "Tecno" + Math.random().toString(36).substring(2,6).toUpperCase();
         const welcomeAmt = Number(appConfig.welcomeBonus) || 0;
-        await setDoc(doc(db, "users", userCred.user.uid), { phone: phone, balance: welcomeAmt, inviteCode: newCode, referredBy: invite || "none", createdAt: new Date().toISOString(), bankName: "", bankNumber: "", isBanned: false });
+        await setDoc(doc(db, "users", userCred.user.uid), { phone: phone, balance: welcomeAmt, inviteCode: newCode, referredBy: invite || "none", createdAt: new Date().toISOString(), bankName: "", bankNumber: "", banks: {}, isBanned: false });
         window.showToast("নিবন্ধন সফল!", true);
     } catch(e) { 
         document.getElementById('global-loader').classList.remove('active'); 
@@ -226,9 +224,15 @@ window.saveBankInfo = async () => {
     const bName = document.getElementById('bank-name').value; 
     const bNum = document.getElementById('bank-number').value.trim(); 
     if(!bNum) return window.showToast("নম্বর দিন!", false); 
+    
     window.withLoading(async()=>{ 
-        await updateDoc(doc(db, "users", activeUserId), { bankName: bName, bankNumber: bNum }); 
-        window.showToast("ব্যাংক যুক্ত হয়েছে!", true); 
+        // ডাটাবেসে মাল্টিপল ব্যাংক সেভ করার সিস্টেম যুক্ত করা হলো
+        await updateDoc(doc(db, "users", activeUserId), { 
+            [`banks.${bName}`]: bNum, 
+            bankName: bName, 
+            bankNumber: bNum 
+        }); 
+        window.showToast(`${bName} যুক্ত হয়েছে!`, true); 
         closeModal('bank-modal'); 
     }, 500); 
 };
@@ -271,7 +275,8 @@ window.buyProduct = (price, name, daily, durationStr) => {
         window.withLoading(async () => {
             try {
                 await updateDoc(doc(db, "users", activeUserId), { balance: currentBalance - price });
-                await addDoc(collection(db, "my_products"), { uid: activeUserId, name: name, price: price, dailyIncome: daily, duration: durationStr, purchaseDate: new Date().toISOString(), claimedDays: 0, lastClaimed: 0 });
+                // lastClaimed: 0 এর পরিবর্তে Date.now() দেওয়া হলো, যাতে সাথে সাথে ক্লেইম করা না যায়
+                await addDoc(collection(db, "my_products"), { uid: activeUserId, name: name, price: price, dailyIncome: daily, duration: durationStr, purchaseDate: new Date().toISOString(), claimedDays: 0, lastClaimed: Date.now() });
                 await addDoc(collection(db, "transactions"), { uid: activeUserId, type: "Purchase", amount: price, status: "Success", details: name, timestamp: new Date().toISOString() });
                 
                 if (referredByCode && referredByCode !== "none") {
@@ -452,11 +457,25 @@ onAuthStateChanged(auth, async (user) => {
                 document.getElementById('mine-user-id').innerText = data.phone;
                 document.getElementById('my-invite-code').innerText = myInviteCode;
                 
+                // একাধিক ব্যাংক অপশন যুক্ত করার লজিক
                 const bSelect = document.getElementById('withdraw-bank-select');
-                if(data.bankName && data.bankNumber) {
-                    bSelect.innerHTML = `<option value="${data.bankName}-${data.bankNumber}">${data.bankName} - ${data.bankNumber}</option>`;
-                    document.getElementById('bank-name').value = data.bankName; 
-                    document.getElementById('bank-number').value = data.bankNumber;
+                let optionsHTML = '';
+                let hasBanks = false;
+                
+                if (data.banks && Object.keys(data.banks).length > 0) {
+                    for (let [name, num] of Object.entries(data.banks)) {
+                        optionsHTML += `<option value="${name}-${num}">${name} - ${num}</option>`;
+                        hasBanks = true;
+                    }
+                } else if (data.bankName && data.bankNumber) { 
+                    optionsHTML += `<option value="${data.bankName}-${data.bankNumber}">${data.bankName} - ${data.bankNumber}</option>`;
+                    hasBanks = true;
+                }
+
+                if (hasBanks) {
+                    bSelect.innerHTML = optionsHTML;
+                    document.getElementById('bank-name').value = data.bankName || ""; 
+                    document.getElementById('bank-number').value = data.bankNumber || "";
                 } else {
                     bSelect.innerHTML = '<option value="">প্রথমে ব্যাংক তথ্য যুক্ত করুন</option>';
                 }
